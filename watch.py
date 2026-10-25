@@ -1,0 +1,99 @@
+"""오산 맑은터공원 캠핑장 빈자리 감시 → ntfy 알림."""
+import json
+import os
+import re
+import sys
+import urllib.parse
+import urllib.request
+from datetime import datetime, timedelta, timezone
+
+URL = "https://forest.maketicket.co.kr/event/event.do?command=event_view_m_area_info"
+BOOKING_URL = "https://forest.maketicket.co.kr/ticket/GD82"
+IDKEY = "5M4220"
+GD_SEQ = "GD82"
+
+DATES = ["20261031", "20261107", "20261114", "20261121", "20261128"]
+ZONES = ["까산이존"]
+
+STATE_FILE = os.environ.get("STATE_FILE", "state.json")
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
+
+KST = timezone(timedelta(hours=9))
+# f_SelectDateZone( '20261031', 'CM000079' , 'SD69032' , '0'); ... <label for="area1">까산이존(0)</label>
+ZONE_RE = re.compile(
+    r"f_SelectDateZone\(\s*'(\d{8})',\s*'(\w+)'\s*,\s*'(\w+)'\s*,\s*'(-?\d+)'\).*?<label[^>]*>([^<(]+)\(",
+    re.S,
+)
+
+
+def fetch_zones(date):
+    data = urllib.parse.urlencode(
+        {"idkey": IDKEY, "gd_seq": GD_SEQ, "sd_date": date, "view_type": "new"}
+    ).encode()
+    req = urllib.request.Request(
+        URL, data=data, headers={"User-Agent": "Mozilla/5.0 (camping-watch)"}
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        html = resp.read().decode("utf-8", "replace")
+    return {name.strip(): int(cnt) for _, _, _, cnt, name in ZONE_RE.findall(html)}
+
+
+def notify(title, message):
+    print(f"[알림] {title}: {message}")
+    if not NTFY_TOPIC:
+        return
+    # 한글 제목은 헤더 대신 쿼리 파라미터로 보낸다
+    params = urllib.parse.urlencode(
+        {"title": title, "priority": "high", "tags": "tent", "click": BOOKING_URL}
+    )
+    req = urllib.request.Request(
+        f"https://ntfy.sh/{NTFY_TOPIC}?{params}", data=message.encode()
+    )
+    urllib.request.urlopen(req, timeout=20).read()
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def main():
+    today = datetime.now(KST).strftime("%Y%m%d")
+    prev = load_state()
+    state = {}
+    errors = 0
+
+    for date in DATES:
+        if date < today:
+            continue
+        try:
+            zones = fetch_zones(date)
+        except Exception as e:
+            print(f"{date}: 조회 실패 {e}", file=sys.stderr)
+            errors += 1
+            continue
+        for zone in ZONES:
+            key = f"{date}/{zone}"
+            cnt = zones.get(zone)
+            print(f"{key}: {cnt}")
+            if cnt is None:
+                continue
+            state[key] = cnt
+            # 0 → 1 이상으로 바뀌었거나 자리가 더 늘었을 때만 알림
+            if cnt > 0 and cnt > prev.get(key, 0):
+                d = datetime.strptime(date, "%Y%m%d")
+                label = f"{d.month}/{d.day}({'월화수목금토일'[d.weekday()]})"
+                notify(f"{zone} 빈자리 {cnt}개!", f"{label} {zone} 잔여 {cnt}. 지금 예약하세요.")
+
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, ensure_ascii=False)
+
+    if errors == len([d for d in DATES if d >= today]):
+        sys.exit("모든 날짜 조회 실패")
+
+
+if __name__ == "__main__":
+    main()
