@@ -34,8 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
-      actions: write  # 다음 실행 시작용
-      contents: read
+      actions: write   # 다음 실행 시작용
+      contents: write  # 감시 현황(status 브랜치) 기록용
     concurrency:
       group: watch
       cancel-in-progress: false
@@ -53,6 +53,7 @@ jobs:
         id: check
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          GITHUB_TOKEN: ${{ github.token }}
           INTERVAL: "10"
           DURATION: ${{ inputs.duration || '21000' }}
         run: python3 watch.py
