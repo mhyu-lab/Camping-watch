@@ -7,18 +7,35 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
+      test_notify:
+        description: "테스트 알림만 보내기"
+        type: boolean
+        default: false
       duration:
         description: "감시 시간(초)"
         default: "21000"
 
-concurrency:
-  group: watch
-  cancel-in-progress: false
-
 jobs:
+  # 감시 중에도 바로 실행되도록 concurrency 그룹 밖에 둔다
+  test-notify:
+    if: ${{ inputs.test_notify }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: 테스트 알림 보내기
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TEST_NOTIFY: "1"
+        run: python3 watch.py
+
   watch:
+    if: ${{ !inputs.test_notify }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    concurrency:
+      group: watch
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 

@@ -100,6 +100,12 @@ def save_state(state):
 
 
 def main():
+    if os.environ.get("TEST_NOTIFY"):
+        if not NTFY_TOPIC:
+            sys.exit("NTFY_TOPIC Secret이 비어 있어요.")
+        notify("캠핑장 감시 테스트", "이 알림이 보이면 설정 완료!")
+        return
+
     # INTERVAL초마다 DURATION초 동안 반복 (DURATION=0이면 한 번만)
     interval = int(os.environ.get("INTERVAL", "10"))
     duration = int(os.environ.get("DURATION", "0"))
