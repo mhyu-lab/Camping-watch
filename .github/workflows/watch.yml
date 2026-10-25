@@ -6,6 +6,10 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      duration:
+        description: "감시 시간(초)"
+        default: "21000"
 
 concurrency:
   group: watch
@@ -29,7 +33,7 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           INTERVAL: "10"
-          DURATION: "21000"
+          DURATION: ${{ inputs.duration || '21000' }}
         run: python3 watch.py
 
       - name: 상태 저장
