@@ -1,7 +1,7 @@
 name: 캠핑장 빈자리 감시
 
-# 한 번 실행되면 약 5시간 50분 동안 10초마다 확인한다.
-# 30분마다 예약된 다음 실행은 앞 실행이 끝날 때까지 대기했다가 이어받는다.
+# 한 번 실행되면 약 5시간 50분 동안 10초마다 확인하고, 끝날 때 다음 실행을 직접 시작한다.
+# 30분마다 예약된 실행은 이어달리기가 끊겼을 때를 대비한 예비다.
 on:
   schedule:
     - cron: "*/30 * * * *"
@@ -33,6 +33,9 @@ jobs:
     if: ${{ !inputs.test_notify }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    permissions:
+      actions: write  # 다음 실행 시작용
+      contents: read
     concurrency:
       group: watch
       cancel-in-progress: false
@@ -47,6 +50,7 @@ jobs:
           restore-keys: state-
 
       - name: 빈자리 확인 (10초마다)
+        id: check
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           INTERVAL: "10"
@@ -59,3 +63,11 @@ jobs:
         with:
           path: state.json
           key: state-${{ github.run_id }}
+
+      # 수동 취소가 아니고 감시할 날짜가 남았으면 다음 감시를 바로 시작한다.
+      # 새 실행은 이 작업이 끝날 때까지 대기했다가 이어받는다.
+      - name: 다음 감시 시작
+        if: ${{ !cancelled() && steps.check.outputs.done != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run watch.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"

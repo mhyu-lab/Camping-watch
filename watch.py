@@ -116,6 +116,10 @@ def main():
     while True:
         if max(DATES) < datetime.now(KST).strftime("%Y%m%d"):
             print("감시할 날짜가 모두 지났어요.")
+            # 워크플로가 다음 감시를 이어서 시작하지 않도록 알린다
+            if os.environ.get("GITHUB_OUTPUT"):
+                with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                    f.write("done=true\n")
             break
         new = check(state)
         if new is None:
