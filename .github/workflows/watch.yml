@@ -1,8 +1,10 @@
 name: 캠핑장 빈자리 감시
 
+# 한 번 실행되면 약 5시간 50분 동안 10초마다 확인한다.
+# 30분마다 예약된 다음 실행은 앞 실행이 끝날 때까지 대기했다가 이어받는다.
 on:
   schedule:
-    - cron: "*/5 * * * *"  # 5분마다 (GitHub 사정에 따라 몇 분 늦을 수 있음)
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +14,7 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
@@ -23,9 +25,11 @@ jobs:
           key: state-${{ github.run_id }}
           restore-keys: state-
 
-      - name: 빈자리 확인
+      - name: 빈자리 확인 (10초마다)
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          INTERVAL: "10"
+          DURATION: "21000"
         run: python3 watch.py
 
       - name: 상태 저장

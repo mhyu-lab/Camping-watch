@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -60,9 +61,9 @@ def load_state():
         return {}
 
 
-def main():
+def check(prev):
+    """한 번 조회해서 새 상태를 돌려준다. 모든 날짜 조회에 실패하면 None."""
     today = datetime.now(KST).strftime("%Y%m%d")
-    prev = load_state()
     state = {}
     errors = 0
 
@@ -78,7 +79,7 @@ def main():
         for zone in ZONES:
             key = f"{date}/{zone}"
             cnt = zones.get(zone)
-            print(f"{key}: {cnt}")
+            print(f"{datetime.now(KST):%H:%M:%S} {key}: {cnt}", flush=True)
             if cnt is None:
                 continue
             state[key] = cnt
@@ -88,10 +89,43 @@ def main():
                 label = f"{d.month}/{d.day}({'월화수목금토일'[d.weekday()]})"
                 notify(f"{zone} 빈자리 {cnt}개!", f"{label} {zone} 잔여 {cnt}. 지금 예약하세요.")
 
+    if errors and errors == len([d for d in DATES if d >= today]):
+        return None
+    return state
+
+
+def save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, ensure_ascii=False)
 
-    if errors == len([d for d in DATES if d >= today]):
+
+def main():
+    # INTERVAL초마다 DURATION초 동안 반복 (DURATION=0이면 한 번만)
+    interval = int(os.environ.get("INTERVAL", "10"))
+    duration = int(os.environ.get("DURATION", "0"))
+    end = time.monotonic() + duration
+    state = load_state()
+    fails = 0
+
+    while True:
+        if max(DATES) < datetime.now(KST).strftime("%Y%m%d"):
+            print("감시할 날짜가 모두 지났어요.")
+            break
+        new = check(state)
+        if new is None:
+            fails += 1
+            # 연속 실패가 길어지면(차단 등) 알림 한 번
+            if fails == 30:
+                notify("캠핑장 감시 오류", "예약 사이트 조회가 계속 실패하고 있어요.")
+        else:
+            fails = 0
+            state = {**state, **new}
+            save_state(state)
+        if time.monotonic() + interval >= end:
+            break
+        time.sleep(interval)
+
+    if fails and duration == 0:
         sys.exit("모든 날짜 조회 실패")
 
 
