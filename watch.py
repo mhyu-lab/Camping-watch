@@ -1,4 +1,4 @@
-"""오산 맑은터공원 캠핑장 빈자리 감시 → ntfy 알림."""
+"""오산 맑은터공원 · 의왕 왕송호수 캠핑장 빈자리 감시 → ntfy 알림."""
 import json
 import os
 import re
@@ -16,6 +16,12 @@ GD_SEQ = "GD82"
 
 DATES = ["20261031", "20261107"]
 ZONES = ["까산이존"]
+
+# 의왕 왕송호수캠핑장: 본인인증 로그인 쿠키(JSESSIONID)가 있어야 조회된다
+UUC_LIST_URL = "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102"
+UUC_DATES = ["20261031", "20261107"]
+UUC_TYPES = ["글램핑", "카라반", "데크"]
+UUC_SESSION = os.environ.get("UUC_SESSION", "")
 
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
@@ -45,13 +51,39 @@ def fetch_zones(date):
     return {name.strip(): int(cnt) for _, _, _, cnt, name in ZONE_RE.findall(html)}
 
 
-def notify(title, message):
+class UucLoggedOut(Exception):
+    pass
+
+
+def fetch_uuc(month):
+    """month(YYYYMM) 예약 달력에서 {YYYYMMDD: {'의왕 데크': n, ...}}를 읽는다."""
+    req = urllib.request.Request(
+        f"{UUC_LIST_URL}&scheduleDate={month}",
+        headers={"User-Agent": "Mozilla/5.0", "Cookie": f"JSESSIONID={UUC_SESSION}"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        if "/member/cert/" in resp.geturl():
+            raise UucLoggedOut()
+        html = resp.read().decode("utf-8", "replace")
+    # 날짜별 블록 안에서 if('남은수' <= 0){ classZero = "zero"; } switch ('종류') 순서로 박혀 있다
+    out = {}
+    parts = re.split(r"if\('(\d{4})-(\d{2})-(\d{2})' == selectDate\)\{", html)
+    for i in range(1, len(parts), 4):
+        date, body = "".join(parts[i:i + 3]), parts[i + 3]
+        for t in UUC_TYPES:
+            m = re.search(r"if\('(-?\d+)' <= 0 \)\{\s*classZero = \"zero\";\s*\}\s*switch \('" + t + r"'\)", body)
+            if m:
+                out.setdefault(date, {})[f"의왕 {t}"] = int(m.group(1))
+    return out
+
+
+def notify(title, message, click=BOOKING_URL):
     print(f"[알림] {title}: {message}")
     if not NTFY_TOPIC:
         return
     # 한글 제목은 헤더 대신 쿼리 파라미터로 보낸다
     params = urllib.parse.urlencode(
-        {"title": title, "priority": "high", "tags": "tent", "click": BOOKING_URL}
+        {"title": title, "priority": "high", "tags": "tent", "click": click}
     )
     req = urllib.request.Request(
         f"https://ntfy.sh/{NTFY_TOPIC}?{params}", data=message.encode()
@@ -110,14 +142,16 @@ def load_state():
 
 
 def check(prev):
-    """한 번 조회해서 새 상태를 돌려준다. 모든 날짜 조회에 실패하면 None."""
+    """한 번 조회해서 새 상태를 돌려준다. 모든 조회에 실패하면 None."""
     today = datetime.now(KST).strftime("%Y%m%d")
     state = {}
-    errors = 0
+    results = []  # (날짜, 구역, 잔여, 예약 URL)
+    tried = errors = 0
 
     for date in DATES:
         if date < today:
             continue
+        tried += 1
         try:
             zones = fetch_zones(date)
         except Exception as e:
@@ -125,21 +159,45 @@ def check(prev):
             errors += 1
             continue
         for zone in ZONES:
-            key = f"{date}/{zone}"
-            cnt = zones.get(zone)
-            print(f"{datetime.now(KST):%H:%M:%S} {key}: {cnt}", flush=True)
-            if cnt is None:
-                continue
-            state[key] = cnt
-            # 0 → 1 이상으로 바뀌었거나 자리가 더 늘었을 때만 알림
-            if cnt > 0 and cnt > prev.get(key, 0):
-                d = datetime.strptime(date, "%Y%m%d")
-                label = f"{d.month}/{d.day}({'월화수목금토일'[d.weekday()]})"
-                msg = f"{label} {zone} 잔여 {cnt}. 지금 예약하세요."
-                notify(f"{zone} 빈자리 {cnt}개!", msg)
-                state["_last_alert"] = {"at": now_iso(), "message": msg}
+            results.append((date, zone, zones.get(zone), BOOKING_URL))
 
-    if errors and errors == len([d for d in DATES if d >= today]):
+    uuc_dates = [d for d in UUC_DATES if d >= today]
+    if UUC_SESSION and uuc_dates:
+        for month in sorted({d[:6] for d in uuc_dates}):
+            tried += 1
+            try:
+                found = fetch_uuc(month)
+            except UucLoggedOut:
+                tried -= 1  # 로그인 만료는 조회 실패로 세지 않고, 알림 여부만 상태로 남긴다
+                if not (prev.get("_uuc_expired") or state.get("_uuc_expired")):
+                    notify("의왕호수 로그인 만료", "다시 본인인증 로그인이 필요해요. Claude에게 요청하세요.", UUC_LIST_URL)
+                state["_uuc_expired"] = True
+                continue
+            except Exception as e:
+                print(f"의왕 {month}: 조회 실패 {e}", file=sys.stderr)
+                errors += 1
+                continue
+            state["_uuc_expired"] = False
+            for date in uuc_dates:
+                if date[:6] == month:
+                    for t in UUC_TYPES:
+                        results.append((date, f"의왕 {t}", found.get(date, {}).get(f"의왕 {t}"), UUC_LIST_URL))
+
+    for date, zone, cnt, url in results:
+        key = f"{date}/{zone}"
+        print(f"{datetime.now(KST):%H:%M:%S} {key}: {cnt}", flush=True)
+        if cnt is None:
+            continue
+        state[key] = cnt
+        # 0 → 1 이상으로 바뀌었거나 자리가 더 늘었을 때만 알림
+        if cnt > 0 and cnt > prev.get(key, 0):
+            d = datetime.strptime(date, "%Y%m%d")
+            label = f"{d.month}/{d.day}({'월화수목금토일'[d.weekday()]})"
+            msg = f"{label} {zone} 잔여 {cnt}. 지금 예약하세요."
+            notify(f"{zone} 빈자리 {cnt}개!", msg, url)
+            state["_last_alert"] = {"at": now_iso(), "message": msg}
+
+    if tried and errors == tried:
         return None
     return state
 
@@ -167,6 +225,18 @@ def main():
     run = {"checks": 0, "started_at": now_iso()}
     last_publish = 0.0
 
+    def results(today):
+        """{날짜: {구역: 잔여}} — 감시 중인 날짜·구역만."""
+        out = {}
+        for d in DATES:
+            if d >= today:
+                out.setdefault(d, {}).update({z: state.get(f"{d}/{z}") for z in ZONES})
+        if UUC_SESSION:
+            for d in UUC_DATES:
+                if d >= today:
+                    out.setdefault(d, {}).update({f"의왕 {t}": state.get(f"{d}/의왕 {t}") for t in UUC_TYPES})
+        return dict(sorted(out.items()))
+
     def status(state_name):
         today = datetime.now(KST).strftime("%Y%m%d")
         return {
@@ -178,15 +248,15 @@ def main():
             "since": stats["since"],
             "run": run,
             "consecutive_fails": fails,
-            "zones": ZONES,
-            "results": {
-                d: {z: state.get(f"{d}/{z}") for z in ZONES} for d in DATES if d >= today
-            },
+            "results": results(today),
+            "links": {**{z: BOOKING_URL for z in ZONES},
+                      **{f"의왕 {t}": UUC_LIST_URL for t in UUC_TYPES}},
+            "uuc_expired": bool(UUC_SESSION) and state.get("_uuc_expired", False),
             "last_alert": state.get("_last_alert"),
         }
 
     while True:
-        if max(DATES) < datetime.now(KST).strftime("%Y%m%d"):
+        if max(DATES + (UUC_DATES if UUC_SESSION else [])) < datetime.now(KST).strftime("%Y%m%d"):
             print("감시할 날짜가 모두 지났어요.")
             publish_status(status("finished"))
             # 워크플로가 다음 감시를 이어서 시작하지 않도록 알린다
