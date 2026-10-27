@@ -15,7 +15,7 @@ IDKEY = "5M4220"
 GD_SEQ = "GD82"
 
 DATES = ["20261031", "20261107"]
-ZONES = ["까산이존"]
+ZONES = ["까산이존", "매화존"]
 
 # 의왕 왕송호수캠핑장: 본인인증 로그인 쿠키(JSESSIONID)가 있어야 조회된다
 UUC_LIST_URL = "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102"
