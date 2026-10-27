@@ -14,7 +14,7 @@ BOOKING_URL = "https://forest.maketicket.co.kr/ticket/GD82"
 IDKEY = "5M4220"
 GD_SEQ = "GD82"
 
-DATES = ["20261031"]
+DATES = ["20261031", "20261107"]
 ZONES = ["까산이존"]
 
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
