@@ -21,10 +21,10 @@ ZONES = ["까산이존"]
 UUC_LIST_URL = "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102"
 UUC_DATES = ["20261031", "20261107"]
 UUC_TYPES = ["글램핑", "카라반", "데크"]
-UUC_SESSION = os.environ.get("UUC_SESSION", "")
+UUC_SESSION = os.environ.get("UUC_SESSION", "").strip()  # Secret 붙여넣기 때 줄바꿈이 섞일 수 있다
 
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
-NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 # 감시 현황(status.json)을 올릴 브랜치와 주기(초). 웹페이지(docs/index.html)가 읽는다.
 STATUS_BRANCH = "status"
 STATUS_EVERY = 60
