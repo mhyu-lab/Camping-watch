@@ -1,0 +1,41 @@
+{
+ "state": "running",
+ "updated_at": "2026-10-28T12:54:36+09:00",
+ "interval": 10,
+ "total_checks": 5107,
+ "failed_checks": 0,
+ "since": "2026-10-25T15:57:48+09:00",
+ "run": {
+  "checks": 9,
+  "started_at": "2026-10-28T12:52:16+09:00"
+ },
+ "consecutive_fails": 0,
+ "results": {
+  "20261031": {
+   "까산이존": 0,
+   "매화존": 0,
+   "의왕 글램핑": 0,
+   "의왕 카라반": 0,
+   "의왕 데크": 0
+  },
+  "20261107": {
+   "까산이존": 0,
+   "매화존": 1,
+   "의왕 글램핑": 0,
+   "의왕 카라반": 0,
+   "의왕 데크": 0
+  }
+ },
+ "links": {
+  "까산이존": "https://forest.maketicket.co.kr/ticket/GD82",
+  "매화존": "https://forest.maketicket.co.kr/ticket/GD82",
+  "의왕 글램핑": "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102",
+  "의왕 카라반": "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102",
+  "의왕 데크": "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102"
+ },
+ "uuc_expired": false,
+ "last_alert": {
+  "at": "2026-10-28T12:49:19+09:00",
+  "message": "11/7(토) 매화존 잔여 1. 지금 예약하세요."
+ }
+}
