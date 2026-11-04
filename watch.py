@@ -1,4 +1,4 @@
-"""오산 맑은터공원 · 의왕 왕송호수 캠핑장 빈자리 감시 → ntfy 알림."""
+"""오산 맑은터공원 · 수원 광교호수 · 의왕 왕송호수 캠핑장 빈자리 감시 → ntfy 알림."""
 import json
 import os
 import re
@@ -16,6 +16,13 @@ GD_SEQ = "GD82"
 
 DATES = ["20261107"]
 ZONES = ["카라반존 4인", "카라반존 6인"]
+
+# 수원 광교호수공원 가족캠핑장: 맑은터공원과 같은 예약 사이트(maketicket)
+GG_BOOKING_URL = "https://forest.maketicket.co.kr/ticket/GD129"
+GG_IDKEY = "5M4255"
+GG_GD_SEQ = "GD129"
+GG_DATES = ["20261107"]
+GG_ZONES = ["캐러반"]  # 사이트의 구역 이름. 알림·현황에는 "광교 캐러반"으로 표시
 
 # 의왕 왕송호수캠핑장: 본인인증 로그인 쿠키(JSESSIONID)가 있어야 조회된다
 UUC_LIST_URL = "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102"
@@ -39,9 +46,9 @@ ZONE_RE = re.compile(
 )
 
 
-def fetch_zones(date):
+def fetch_zones(date, idkey=IDKEY, gd_seq=GD_SEQ):
     data = urllib.parse.urlencode(
-        {"idkey": IDKEY, "gd_seq": GD_SEQ, "sd_date": date, "view_type": "new"}
+        {"idkey": idkey, "gd_seq": gd_seq, "sd_date": date, "view_type": "new"}
     ).encode()
     req = urllib.request.Request(
         URL, data=data, headers={"User-Agent": "Mozilla/5.0 (camping-watch)"}
@@ -161,6 +168,19 @@ def check(prev):
         for zone in ZONES:
             results.append((date, zone, zones.get(zone), BOOKING_URL))
 
+    for date in GG_DATES:
+        if date < today:
+            continue
+        tried += 1
+        try:
+            zones = fetch_zones(date, GG_IDKEY, GG_GD_SEQ)
+        except Exception as e:
+            print(f"광교 {date}: 조회 실패 {e}", file=sys.stderr)
+            errors += 1
+            continue
+        for zone in GG_ZONES:
+            results.append((date, f"광교 {zone}", zones.get(zone), GG_BOOKING_URL))
+
     uuc_dates = [d for d in UUC_DATES if d >= today]
     if UUC_SESSION and uuc_dates:
         for month in sorted({d[:6] for d in uuc_dates}):
@@ -231,6 +251,9 @@ def main():
         for d in DATES:
             if d >= today:
                 out.setdefault(d, {}).update({z: state.get(f"{d}/{z}") for z in ZONES})
+        for d in GG_DATES:
+            if d >= today:
+                out.setdefault(d, {}).update({f"광교 {z}": state.get(f"{d}/광교 {z}") for z in GG_ZONES})
         if UUC_SESSION:
             for d in UUC_DATES:
                 if d >= today:
@@ -250,13 +273,14 @@ def main():
             "consecutive_fails": fails,
             "results": results(today),
             "links": {**{z: BOOKING_URL for z in ZONES},
+                      **{f"광교 {z}": GG_BOOKING_URL for z in GG_ZONES},
                       **{f"의왕 {t}": UUC_LIST_URL for t in UUC_TYPES}},
             "uuc_expired": bool(UUC_SESSION) and state.get("_uuc_expired", False),
             "last_alert": state.get("_last_alert"),
         }
 
     while True:
-        if max(DATES + (UUC_DATES if UUC_SESSION else [])) < datetime.now(KST).strftime("%Y%m%d"):
+        if max(DATES + GG_DATES + (UUC_DATES if UUC_SESSION else [])) < datetime.now(KST).strftime("%Y%m%d"):
             print("감시할 날짜가 모두 지났어요.")
             publish_status(status("finished"))
             # 워크플로가 다음 감시를 이어서 시작하지 않도록 알린다
