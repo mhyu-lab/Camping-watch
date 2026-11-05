@@ -63,10 +63,9 @@
   </header>
 
   <section class="card">
-    <div class="label">총 감시 횟수</div>
-    <div class="big" id="total">–</div>
+    <div class="label">이번 실행 감시 횟수</div>
+    <div class="big" id="run">–</div>
     <div class="row">
-      <div><div class="label">이번 실행</div><div class="num" id="run">–</div></div>
       <div><div class="label">조회 실패</div><div class="num" id="failed">–</div></div>
       <div><div class="label">간격</div><div class="num" id="interval">–</div></div>
     </div>
@@ -118,11 +117,10 @@ function tick() {
 }
 
 function render() {
-  $("total").textContent = fmt(data.total_checks) + "회";
   $("run").textContent = fmt(data.run.checks) + "회";
-  $("failed").textContent = fmt(data.failed_checks) + "회";
+  $("failed").textContent = fmt(data.run.failed ?? 0) + "회";
   $("interval").textContent = data.interval + "초";
-  $("since").textContent = `${timeLabel(data.since)}부터 누적`;
+  $("since").textContent = `${timeLabel(data.run.started_at)}부터 실행 중`;
   const ul = $("dates");
   ul.innerHTML = "";
   const dates = Object.keys(data.results).sort();

@@ -15,7 +15,7 @@ IDKEY = "5M4220"
 GD_SEQ = "GD82"
 
 DATES = ["20261107"]
-ZONES = ["카라반존 4인", "카라반존 6인"]
+ZONES = ["카라반존 4인", "카라반존 6인"]  # 알림·현황에는 "오산 카라반존 4인"처럼 표시
 
 # 수원 광교호수공원 가족캠핑장: 맑은터공원과 같은 예약 사이트(maketicket)
 GG_BOOKING_URL = "https://forest.maketicket.co.kr/ticket/GD129"
@@ -166,7 +166,7 @@ def check(prev):
             errors += 1
             continue
         for zone in ZONES:
-            results.append((date, zone, zones.get(zone), BOOKING_URL))
+            results.append((date, f"오산 {zone}", zones.get(zone), BOOKING_URL))
 
     for date in GG_DATES:
         if date < today:
@@ -242,7 +242,7 @@ def main():
     fails = 0
     # 누적 횟수는 state.json에 남겨 다음 실행으로 이어진다
     stats = state.setdefault("_stats", {"total": 0, "failed": 0, "since": now_iso()})
-    run = {"checks": 0, "started_at": now_iso()}
+    run = {"checks": 0, "failed": 0, "started_at": now_iso()}
     last_publish = 0.0
 
     def results(today):
@@ -250,7 +250,7 @@ def main():
         out = {}
         for d in DATES:
             if d >= today:
-                out.setdefault(d, {}).update({z: state.get(f"{d}/{z}") for z in ZONES})
+                out.setdefault(d, {}).update({f"오산 {z}": state.get(f"{d}/오산 {z}") for z in ZONES})
         for d in GG_DATES:
             if d >= today:
                 out.setdefault(d, {}).update({f"광교 {z}": state.get(f"{d}/광교 {z}") for z in GG_ZONES})
@@ -272,7 +272,7 @@ def main():
             "run": run,
             "consecutive_fails": fails,
             "results": results(today),
-            "links": {**{z: BOOKING_URL for z in ZONES},
+            "links": {**{f"오산 {z}": BOOKING_URL for z in ZONES},
                       **{f"광교 {z}": GG_BOOKING_URL for z in GG_ZONES},
                       **{f"의왕 {t}": UUC_LIST_URL for t in UUC_TYPES}},
             "uuc_expired": bool(UUC_SESSION) and state.get("_uuc_expired", False),
@@ -294,6 +294,7 @@ def main():
         if new is None:
             fails += 1
             stats["failed"] += 1
+            run["failed"] += 1
             # 연속 실패가 길어지면(차단 등) 알림 한 번
             if fails == 30:
                 notify("캠핑장 감시 오류", "예약 사이트 조회가 계속 실패하고 있어요.")
