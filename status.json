@@ -1,0 +1,33 @@
+{
+ "state": "running",
+ "updated_at": "2026-11-06T06:11:34+09:00",
+ "interval": 10,
+ "total_checks": 13119,
+ "failed_checks": 0,
+ "since": "2026-10-25T15:57:48+09:00",
+ "run": {
+  "checks": 643,
+  "failed": 0,
+  "started_at": "2026-11-06T03:29:16+09:00"
+ },
+ "consecutive_fails": 0,
+ "results": {
+  "20261107": {
+   "오산 카라반존 4인": 0,
+   "오산 카라반존 6인": 0,
+   "광교 캐러반": 0,
+   "의왕 카라반": 0
+  }
+ },
+ "links": {
+  "오산 카라반존 4인": "https://forest.maketicket.co.kr/ticket/GD82",
+  "오산 카라반존 6인": "https://forest.maketicket.co.kr/ticket/GD82",
+  "광교 캐러반": "https://forest.maketicket.co.kr/ticket/GD129",
+  "의왕 카라반": "https://www.uuc.or.kr/camp/camp/reservation/list?menuLevel=2&menuNo=102"
+ },
+ "uuc_expired": false,
+ "last_alert": {
+  "at": "2026-11-05T19:40:08+09:00",
+  "message": "11/7(토) 광교 캐러반 잔여 1. 지금 예약하세요."
+ }
+}
